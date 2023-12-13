@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>公司email註冊系統</title>
+</head>
+<body>
+   <h2>公司首頁</h2> 
+   <div>歡迎光臨</div>
+   <br/>
+   <h2>Email註冊首頁</h2>
+   
+   <form action="/signup" method="POST">
+    姓名<input type="text" name="nickname"/><br/>
+    信箱帳號<input type="text" name="account"/><br/>
+    信箱密碼<input type="password" name="password"/><br/>
+    <button>註冊</button>
+   </form>
+   <br/>
+   <h2>Email登入</h2>
+   <form action="/signin" method="POST">
+    登入帳號<input type="text" name="account"/><br/>
+    登入密碼<input type="password" name="password"/><br/>
+    <button>登入</button>  
+   </form>
+   <br/>
+   <form action="/">
+    <button>回首頁</button>  
+   </form>
+</body>
+</html>
