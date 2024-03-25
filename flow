@@ -1,0 +1,190 @@
+@{
+    ViewData["Title"] = "Flow";
+}
+<h1>@ViewData["Title"]</h1>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>jsPlumb Custom Nodes Example</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsPlumb/2.14.6/js/jsplumb.min.js"></script>
+    <style>
+        .endpoint {
+            width: 50px;
+            height: 50px;
+            position: absolute;
+            cursor: pointer;
+        }
+
+        .start-point {
+            background-color: green;
+        }
+
+        .end-point {
+            background-color: red;
+        }
+
+        .node-point {
+            background-color: blue;
+        }
+
+        .output {
+            margin-top: 600px;
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+            white-space: pre;
+        }
+
+        #contextMenu {
+            display: none;
+            position: absolute;
+            z-index: 1000;
+            background-color: white;
+            border: 1px solid black;
+            padding: 5px;
+        }
+
+            #contextMenu ul {
+                list-style: none;
+                margin: 0;
+                padding: 0;
+            }
+
+                #contextMenu ul li {
+                    padding: 5px;
+                    cursor: pointer;
+                }
+
+                    #contextMenu ul li:hover {
+                        background-color: #ddd;
+                    }
+    </style>
+</head>
+<body>
+    <div>
+        <button onclick="createNode('start')">Create Start Point</button>
+        <button onclick="createNode('node')">Create Node</button>
+        <button onclick="createNode('end')">Create End Point</button>
+    </div>
+    <div id="drawingArea" style="height:500px; position:relative;"></div>
+    <button onclick="exportConnections()">Export Connections</button>
+    <div id="jsonOutput">JSON output will appear here...</div>
+    <div id="xmlOutput">XML output will appear here...</div>
+
+    <!-- Context menu for deleting items -->
+    <div id="contextMenu">
+        <ul>
+            <li onclick="deleteElement()">Delete</li>
+        </ul>
+    </div>
+
+    <script>
+        var instance;
+        var currentElement = null;  // To keep track of the current element (node or connection)
+
+        function setupJsPlumb() {
+            instance = jsPlumb.getInstance({
+                DragOptions: { cursor: 'pointer', zIndex: 2000 },
+                Container: "drawingArea"
+            });
+
+            instance.bind("connection", function (info) {
+                setupContextMenu(info.connection.canvas, info.connection);
+            });
+
+            instance.bind("contextmenu", function (component, originalEvent) {
+                originalEvent.preventDefault();
+                return false; // Prevent the default context menu
+            });
+
+            document.addEventListener('click', function (e) {
+                document.getElementById('contextMenu').style.display = 'none';
+            }, true);
+        }
+
+        function createNode(type) {
+            var newNode = document.createElement('div');
+            var id = 'item' + Date.now(); // Unique ID
+            newNode.className = 'endpoint ' + type + '-point';
+            newNode.innerHTML = type.charAt(0).toUpperCase() + type.slice(1); // Start, Node, End
+            newNode.id = id;
+            newNode.style.top = '100px';
+            newNode.style.left = (100 + Math.random() * 300) + 'px'; // Randomize initial position a bit
+
+            newNode.onclick = function () { // Add onclick event to create endpoints
+                createEndpoints(id);
+            };
+
+            document.getElementById('drawingArea').appendChild(newNode);
+            instance.draggable(newNode);
+        }
+
+        function createEndpoints(id) {
+            var anchors = ['Left', 'Right', 'Bottom'];
+            anchors.forEach(anchor => {
+                var existingEndpoints = instance.getEndpoints(id);
+                if (!existingEndpoints || existingEndpoints.length === 0) { // Check if endpoints already exist
+                    instance.addEndpoint(id, { anchor: anchor, maxConnections: -1 }, { isSource: true, isTarget: true });
+                }
+            });
+        }
+
+
+        function setupContextMenu(element, connection) {
+            element.oncontextmenu = function (e) {
+                e.preventDefault();
+                currentElement = connection || this; // Save the current connection or DOM element
+                showContextMenu(e.pageX, e.pageY);
+                return false; // Prevent the default context menu
+            };
+        }
+
+        function showContextMenu(x, y) {
+            var menu = document.getElementById('contextMenu');
+            menu.style.top = y + 'px';
+            menu.style.left = x + 'px';
+            menu.style.display = 'block';
+        }
+
+        function deleteElement() {
+            if (currentElement) {
+                if (currentElement instanceof jsPlumb.Connection) {
+                    instance.deleteConnection(currentElement);
+                } else {
+                    instance.removeAllEndpoints(currentElement.id);
+                    document.getElementById('drawingArea').removeChild(currentElement);
+                }
+                currentElement = null;
+            }
+            document.getElementById('contextMenu').style.display = 'none';  // Hide the context menu
+        }
+
+        function exportConnections() {
+            var connections = instance.getAllConnections();
+            var exportData = connections.map(function (conn) {
+                return { source: conn.sourceId, target: conn.targetId, anchors: conn.endpoints.map(ep => ep.anchor.type) };
+            });
+
+            // JSON output
+            document.getElementById('jsonOutput').innerText = 'JSON:\n' + JSON.stringify(exportData, null, 4);
+
+            // XML output
+            var xmlStr = '<connections>\n';
+            exportData.forEach(function (conn) {
+                xmlStr += '  <connection>\n';
+                xmlStr += '    <source>' + conn.source + '</source>\n';
+                xmlStr += '    <target>' + conn.target + '</target>\n';
+                xmlStr += '    <sourceAnchor>' + conn.anchors[0] + '</sourceAnchor>\n';
+                xmlStr += '    <targetAnchor>' + conn.anchors[1] + '</targetAnchor>\n';
+                xmlStr += '  </connection>\n';
+            });
+            xmlStr += '</connections>';
+            document.getElementById('xmlOutput').innerText = 'XML:\n' + xmlStr;
+        }
+
+        jsPlumb.ready(function () {
+            setupJsPlumb();
+        });
+    </script>
+</body>
+</html>
