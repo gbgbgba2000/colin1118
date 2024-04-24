@@ -1,0 +1,378 @@
+@{
+    ViewData["Title"] = "Flow";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>jsPlumb Custom Nodes Example</title>
+    <!-- 引入 jsPlumb 的預設樣式表 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jsPlumb/2.14.6/css/jsplumbtoolkit-defaults.css" />
+    <style>
+        /* CSS樣式 */
+        .start-point, .end-point {
+            width: 50px;
+            height: 50px;
+            position: absolute;
+            cursor: pointer;
+        }
+
+        .start-point {
+            background-color: green;
+        }
+
+        .end-point {
+            background-color: red;
+        }
+
+        .node-point {
+            width: 50px;
+            height: 40px;
+            background-color: #b0e0e6;
+            position: absolute;
+            cursor: pointer;
+        }
+
+        .output {
+            margin-top: 600px;
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+            white-space: pre;
+        }
+
+        #contextMenu {
+            display: none;
+            position: absolute;
+            z-index: 1000;
+            background-color: white;
+            border: 1px solid black;
+            padding: 5px;
+        }
+
+            #contextMenu ul {
+                list-style: none;
+                margin: 0;
+                padding: 0;
+            }
+
+                #contextMenu ul li {
+                    padding: 5px;
+                    cursor: pointer;
+                }
+
+                    #contextMenu ul li:hover {
+                        background-color: #ddd;
+                    }
+
+        .custom-label {
+            position: absolute;
+            background-color: white;
+            border: 1px solid black;
+            padding: 2px;
+            border-radius: 4px;
+            z-index: 1000;
+        }
+
+        .connection-label {
+            position: absolute;
+            background-color: white;
+            border: 1px solid black;
+            padding: 2px;
+            border-radius: 4px;
+            z-index: 1000;
+        }
+
+        .jsplumb-connector {
+            position: relative;
+            cursor: pointer;
+        }
+
+        .jsplumb-connector-label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            border: 1px solid black;
+            padding: 2px;
+            border-radius: 4px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <!-- 創建起始點、節點和結束點的按鈕 -->
+    <div>
+        <button onclick="createNode('start')">Create Start Point</button>
+        <button onclick="createNode('node')">Create Node</button>
+        <button onclick="createNode('end')">Create End Point</button>
+    </div>
+    <!-- 繪圖區域 -->
+    <div id="drawingArea" style="height:500px; position:relative;"></div>
+    <!-- 匯出連線的按鈕 -->
+    <button onclick="exportConnections()">Export Connections</button>
+    <!-- 顯示 JSON 和 XML 輸出 -->
+    <div id="jsonOutput">JSON output will appear here...</div>
+    <div id="xmlOutput">XML output will appear here...</div>
+    <div id="jsonOutput2">JSON output will appear here...</div>
+    <!-- 讀取並顯示 JSON 與 XML 資料的按鈕 -->
+    <input type="file" id="fileInput" onchange="loadFile(event)">
+
+
+    <!-- 刪除元素的右鍵選單 -->
+    <div id="contextMenu">
+        <ul>
+            <li onclick="deleteElement()">Delete</li>
+        </ul>
+    </div>
+
+    <!-- 引入 jsPlumb 庫 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsPlumb/2.14.6/js/jsplumb.min.js"></script>
+    <script>
+        var instance; // jsPlumb 實例
+        var currentElement = null;  // 當前元素（節點或連線）
+        var nodeCount = 1; // 節點計數器
+        var lineCount = 1; // 連線計數器
+
+        // 設定 jsPlumb
+        function setupJsPlumb() {
+            instance = jsPlumb.getInstance({
+                DragOptions: { cursor: 'pointer', zIndex: 2000 },
+                Container: "drawingArea",
+                // 使用 Flowchart 連線樣式
+                Connector: ["Flowchart", { curviness: 50, stub: [40, 60], cornerRadius: 5, alwaysRespectStubs: true }],
+                Anchors: ["Left", "Right", "Top"]
+            });
+
+            // 監聽連線事件
+            instance.bind("connection", function (connInfo, originalEvent) {
+                var conn = connInfo.connection;
+                var lineId = "line" + lineCount++;
+                var labelOverlay = conn.getOverlay("label");
+                if (labelOverlay) {
+                    labelOverlay.setLabel(lineId);
+                    conn.setParameter("lineId", lineId); // 將 LINE_ID 儲存在連線的參數中
+                } else {
+                    // 添加 "label" 覆蓋物
+                    conn.addOverlay(["Label", { label: lineId, id: "label" }]);
+                    conn.setParameter("lineId", lineId); // 將 LINE_ID 儲存在連線的參數中
+                }
+               
+            });
+
+            // 監聽右鍵事件，防止浏覽器默认右键菜单弹出
+            instance.bind("contextmenu", function (component, originalEvent) {
+                originalEvent.preventDefault();
+                return false; // 阻止浏覽器默认右键菜单
+            });
+
+            // 監聽文檔點擊事件，隱藏右鍵菜單
+            document.addEventListener('click', function (e) {
+                document.getElementById('contextMenu').style.display = 'none';
+            }, true);
+        }
+
+        // 創建節點
+        function createNode(type) {
+            var newNode = document.createElement('div');
+            var nodeName = "";
+            if (type === 'start') {
+                var id = "start";
+                newNode.className = 'endpoint ' + type + '-point';
+                newNode.innerHTML = "start";
+                newNode.id = id;
+            }
+            else if (type === 'node') {
+                var id = 'node' + nodeCount++;
+                newNode.className = 'endpoint ' + type + '-point';
+                nodeName = prompt("Enter node name:", id);
+                newNode.innerHTML = type === 'node' ? nodeName : type.charAt(0).toUpperCase() + type.slice(1); // 使用者輸入或預設名稱
+                newNode.id = id;
+            }
+            else {
+                var id = 'end';
+                newNode.className = 'endpoint ' + type + '-point';
+                newNode.innerHTML = "end"
+                nodeName: "結束點";
+                newNode.id = id;
+            }
+
+            // 點擊事件創建端點
+            //newNode.onclick = function (e) {
+            //    if (e.target === newNode && !e.ctrlKey) createEndpoints(id);
+            //};
+
+            // 右鍵事件創建右鍵菜單
+            newNode.oncontextmenu = function (e) {
+                e.preventDefault();
+                currentElement = newNode;
+                showContextMenu(e.pageX, e.pageY);
+                return false;
+            };
+
+            // 添加節點到畫布並設置可拖動
+            document.getElementById('drawingArea').appendChild(newNode);
+            instance.draggable(newNode);
+            createEndpoints(id);
+        }
+        
+        // 創建端點
+        function createEndpoints(id) {
+            var existingEndpoints = instance.getEndpoints(id);
+            if (!existingEndpoints || existingEndpoints.length === 0) { // 檢查端點是否存在
+                // 添加端點
+                var endpoint = instance.addEndpoint(id, {
+                    anchor: "Continuous", maxConnections: 10,
+                    endpoint: ["Dot", { radius: 10 }],
+                    connectorOverlays: [
+                        ["Arrow", { width: 10, length: 30, location: 1, id: "arrow" }],
+                        ["Label", { label: "", id: "label" }]
+                    ],
+                },
+                    { isSource: true, isTarget: true });
+                console.log("id " + id);
+                const matches = Array.from(document.querySelectorAll('[id^=node]'));
+                console.log("matches : "+matches);
+                if (id = matches) {
+                    var endpoint2 = instance.addEndpoint(id, {
+                        anchor: "BottomCenter", maxConnections: 10,
+                        endpoint2: ["Dot", { radius: 10 }],
+                        connectorOverlays: [
+                            ["Arrow", { width: 10, length: 30, location: 1, id: "arrow2" }],
+                            ["Label", { label: "", id: "label2" }]
+                        ],
+                    },
+                        { isSource: true, isTarget: true });
+                    console.log("endpoint2 " + id);
+                 } 
+                // 監聽端點點擊事件，創建右鍵菜單
+                endpoint.bind('click', function (conn) {
+                    // createContextMenu(conn);
+                });
+
+                // 添加文本框作為標籤
+                var label = document.createElement('input');
+                label.type = 'text';
+                label.className = 'custom-label';
+                label.style.display = 'none';
+                label.onblur = function () {
+                    endpoint.setLabel(this.value);
+                    this.style.display = 'none';
+                    updateConnectionLabel(endpoint);
+                };
+                label.onkeypress = function (e) {
+                    if (e.keyCode === 13) {
+                        endpoint.setLabel(this.value);
+                        this.style.display = 'none';
+                        updateConnectionLabel(endpoint);
+                    }
+                };
+                endpoint.canvas.appendChild(label);
+
+                // 監聽端點雙擊事件，顯示文本框以編輯標籤
+                endpoint.canvas.ondblclick = function () {
+                    label.value = endpoint.getLabel();
+                    label.style.display = 'block';
+                    label.focus();
+                };
+            }
+        }
+       
+        // 更新連接的標籤
+        function updateConnectionLabel(endpoint) {
+            var connections = instance.getConnections({ source: endpoint.elementId });
+            connections.forEach(function (conn) {
+                var labelOverlay = conn.getOverlay("label");
+                if (labelOverlay) {
+                    labelOverlay.setLabel(endpoint.getLabel());
+                }
+            });
+        }
+
+        // 創建右鍵菜單
+        function createContextMenu(element) {
+            var menu = document.getElementById('contextMenu');
+            menu.style.top = element.canvas.offsetTop + 'px';
+            menu.style.left = element.canvas.offsetLeft + 'px';
+            menu.style.display = 'block';
+            currentElement = element;
+        }
+
+        // 設置連線右鍵菜單
+        function setupContextMenu(element, connection) {
+            element.oncontextmenu = function (e) {
+                e.preventDefault();
+                currentElement = connection || this; // 保存當前連線或 DOM 元素
+                showContextMenu(e.pageX, e.pageY);
+                return false; // 阻止默認右鍵菜單
+            };
+        }
+
+        // 顯示右鍵菜單
+        function showContextMenu(x, y) {
+            var menu = document.getElementById('contextMenu');
+            menu.style.top = y + 'px';
+            menu.style.left = x + 'px';
+            menu.style.display = 'block';
+        }
+
+        // 刪除元素
+        function deleteElement() {
+            if (currentElement) {
+                if (currentElement instanceof jsPlumb.Connection) {
+                    instance.deleteConnection(currentElement);
+                } else {
+                    instance.removeAllEndpoints(currentElement.id);
+                    document.getElementById('drawingArea').removeChild(currentElement);
+                }
+                currentElement = null;
+            }
+            document.getElementById('contextMenu').style.display = 'none';  // 隱藏右鍵菜單
+        }
+
+        // 匯出連線
+        function exportConnections() {
+            var connections = instance.getAllConnections();
+            var exportData = connections.map(function (conn) {
+                return { source: conn.sourceId, target: conn.targetId, lineId: conn.getParameter("lineId"), label: conn.id };
+            });
+
+            // 顯示 JSON 輸出
+            document.getElementById('jsonOutput').innerText = 'JSON:\n' + JSON.stringify(exportData, null, 4);
+
+            // 顯示 XML 輸出
+            var xmlStr = '<connections>\n';
+            exportData.forEach(function (conn) {
+                xmlStr += '  <connection>\n';
+                xmlStr += '    <source>' + conn.source + '</source>\n';
+                xmlStr += '    <target>' + conn.target + '</target>\n';
+                xmlStr += '    <Line_ID>' + conn.lineId + '</Line_ID>\n';
+                xmlStr += '    <label>' + conn.label + '</label>\n';
+                xmlStr += '  </connection>\n';
+            });
+            xmlStr += '</connections>';
+            document.getElementById('xmlOutput').innerText = 'XML:\n' + xmlStr;
+        }
+
+        // 讀取並顯示從文件中選取的 JSON 資料
+        function loadFile(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                const content = event.target.result;
+                console.log(content);
+                document.getElementById('jsonOutput2').innerText = content;
+            };
+            reader.readAsText(file);
+        }
+
+        // 當文檔準備好時設置 jsPlumb
+        jsPlumb.ready(function () {
+            setupJsPlumb();
+        });
+
+    </script>
+</body>
+</html>
